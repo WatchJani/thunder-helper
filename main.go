@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"root/gen"
@@ -18,12 +17,14 @@ const (
 )
 
 type Store struct {
-	*b.BPTree[string, string]
+	b.BPTree[string, string]
+	// *Stream
 }
 
 func NewStore() *Store {
 	return &Store{
-		BPTree: b.NewBPTree[string, string](40_000, 50),
+		BPTree: *b.NewBPTree[string, string](40_000, 50),
+		// Stream: NewStream(4000, 4096),
 	}
 }
 
@@ -87,7 +88,7 @@ func (s *Store) Cutter(data []byte) {
 		}
 
 		wg.Add(1)
-		go Process(data[start:index], fileName.GetValue(), &wg)
+		go s.Process(data[start:index], fileName.GetValue(), &wg)
 	}
 
 	wg.Wait()
@@ -104,7 +105,7 @@ func SmallestThenKey(data []byte, key string) int {
 	return 0
 }
 
-func Process(data []byte, fileName string, wg *sync.WaitGroup) {
+func (s *Store) Process(data []byte, fileName string, wg *sync.WaitGroup) {
 	file, err := os.Open("./example/" + fileName)
 	if err != nil {
 		log.Println(err)
@@ -119,40 +120,35 @@ func Process(data []byte, fileName string, wg *sync.WaitGroup) {
 		log.Println(err)
 	}
 
-	fmt.Println()
-	fmt.Println(string(data))
-	fmt.Println()
-	fmt.Println(string(buf[:n]))
-	fmt.Printf("============================")
-
-	free := make([]byte, KB4*len(data)/4000+4000) //add in system as global state
-
-	var i, j, f int
-	for i+15 < n && j+15 < len(data) {
-		if string(buf[i:i+KeyLength]) < string(data[j:j+KeyLength]) {
-			copy(free[:f], buf[i:i+DataLength])
-			i += DataLength
-		} else {
-			copy(free[:f], data[j:j+KeyLength])
-			j += DataLength
+	if string(buf[:15]) > string(data[:15]) {
+		if err := os.Remove(fileName); err != nil {
+			log.Println(err)
 		}
-
-		f += DataLength
+		//Remove key from tree
 	}
 
+	// fmt.Println()
+	// fmt.Println(string(data))
+	// fmt.Println()
+	// fmt.Println(string(buf[:n]))
+	// fmt.Printf("============================")
+
+	s.MergeSort(buf[:n], data)
+
 	wg.Done()
+
 }
 
-func MergeSort(file, buf []byte) {
+func (s *Store) MergeSort(file, buf []byte) {
 	var fileP, bufP, freeP int
 
-	free := make([]byte, 4096)
+	free := make([]byte, 8000)
 
 	for fileP < len(file) && bufP < len(buf) {
-		if freeP+100 > len(free) {
-			freeP = 0 //Reset
-			//go Write File
-			free = make([]byte, 4096) // get new buffer from the store
+		if freeP >= len(free) {
+			go WriteFile(free)
+			freeP = 0                 //Reset
+			free = make([]byte, 8000) // get new buffer from the store
 		}
 
 		//need optimization for this part, just when we find bigger then copy
@@ -167,26 +163,43 @@ func MergeSort(file, buf []byte) {
 		freeP += 100
 	}
 
-	//strange but magical
+	// strange but magical
 	var pointer, position = &buf, bufP
 	if fileP < len(file) {
 		pointer, position = &file, fileP
 	}
 
-	end := len(free) - fileP
+	if freeP < len(free) && len(*pointer) > position+8000-freeP {
+		copy(free[freeP:], (*pointer)[position:position+8000-freeP])
 
-	for position < len(*pointer) {
-		if freeP+100 > len(free) {
-			*pointer = make([]byte, 4096)
-		}
-
-		if position+end < len(*pointer) {
-			copy(free[freeP:], (*pointer)[position:position+end])
-			end, freeP = end+4000, freeP+position-end
-		} else {
-			copy(free[freeP:], (*pointer)[position:position+len((*pointer))-1-position])
-			break
-		}
+		go WriteFile(free)
+		freeP = 0
+		free = make([]byte, 8000)
 	}
 
+	for position+8000 < len(*pointer) {
+		go WriteFile(free)
+		free = make([]byte, 8000)
+	}
+
+	if position < len(*pointer) {
+		copy(free[freeP:], (*pointer)[position:len(*pointer)])
+		go WriteFile(free)
+	}
+}
+
+func WriteFile(date []byte) {
+	mySuperDuperString := ""
+
+	for index := 0; index < len(date); index += 100 {
+		if mySuperDuperString < string(date[index:index+15]) {
+			mySuperDuperString = string(date[index : index+15])
+		}
+	}
+	// fileName := string(date[:15])
+
+	// file, err := os.Create(fileName)
+	// if err != nil {
+	// log.Println(err)
+	// }
 }
