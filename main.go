@@ -18,12 +18,14 @@ const (
 
 type Store struct {
 	b.BPTree[string, string]
+	sync.Mutex
 	// *Stream
 }
 
 func NewStore() *Store {
 	return &Store{
 		BPTree: *b.NewBPTree[string, string](40_000, 50),
+		Mutex:  sync.Mutex{},
 		// Stream: NewStream(4000, 4096),
 	}
 }
@@ -40,7 +42,6 @@ func (s *Store) LoadKey() {
 	for i, j := 0, 0; i < len(keyBuffer); i, j = i+15, j+1 {
 		s.Insert(string(keyBuffer[i:i+15]), filesName[j])
 	}
-
 }
 
 // test functionality
@@ -60,6 +61,7 @@ func main() {
 
 func (s *Store) Cutter(data []byte) {
 	index, wg := 0, sync.WaitGroup{}
+
 	for index < len(data) {
 		start := index
 
@@ -77,7 +79,7 @@ func (s *Store) Cutter(data []byte) {
 			log.Println(err)
 		}
 
-		for index+3915 < len(data) && key.GetKey() > string(data[index+3900:index+3900+15]) {
+		for index < len(data) && key.GetKey() > string(data[index:index+15]) {
 			index += 4000
 		}
 
@@ -132,13 +134,12 @@ func (s *Store) Process(data []byte, fileName string, wg *sync.WaitGroup) {
 	// fmt.Println()
 	// fmt.Println(string(buf[:n]))
 	// fmt.Printf("============================")
-
 	s.MergeSort(buf[:n], data)
 
 	wg.Done()
-
 }
 
+// problem sa n, nije pun file :D
 func (s *Store) MergeSort(file, buf []byte) {
 	var fileP, bufP, freeP int
 
@@ -146,7 +147,7 @@ func (s *Store) MergeSort(file, buf []byte) {
 
 	for fileP < len(file) && bufP < len(buf) {
 		if freeP >= len(free) {
-			go WriteFile(free)
+			go WriteFile(free, freeP)
 			freeP = 0                 //Reset
 			free = make([]byte, 8000) // get new buffer from the store
 		}
@@ -163,7 +164,6 @@ func (s *Store) MergeSort(file, buf []byte) {
 		freeP += 100
 	}
 
-	// strange but magical
 	var pointer, position = &buf, bufP
 	if fileP < len(file) {
 		pointer, position = &file, fileP
@@ -172,34 +172,31 @@ func (s *Store) MergeSort(file, buf []byte) {
 	if freeP < len(free) && len(*pointer) > position+8000-freeP {
 		copy(free[freeP:], (*pointer)[position:position+8000-freeP])
 
-		go WriteFile(free)
+		go WriteFile(free, 8000-freeP)
+		position += 8000 - freeP
 		freeP = 0
 		free = make([]byte, 8000)
 	}
 
 	for position+8000 < len(*pointer) {
-		go WriteFile(free)
+		go WriteFile(free, 8000)
+		position += 8000
 		free = make([]byte, 8000)
 	}
 
 	if position < len(*pointer) {
 		copy(free[freeP:], (*pointer)[position:len(*pointer)])
-		go WriteFile(free)
+		go WriteFile(free, freeP+len(*pointer)-position)
 	}
 }
 
-func WriteFile(date []byte) {
-	mySuperDuperString := ""
+func WriteFile(date []byte, n int) {
+	fileName := string(date[:15])
 
-	for index := 0; index < len(date); index += 100 {
-		if mySuperDuperString < string(date[index:index+15]) {
-			mySuperDuperString = string(date[index : index+15])
-		}
+	file, err := os.Create("./save/" + fileName + ".bin")
+	if err != nil {
+		log.Println(err)
 	}
-	// fileName := string(date[:15])
 
-	// file, err := os.Create(fileName)
-	// if err != nil {
-	// log.Println(err)
-	// }
+	go file.Write(date)
 }

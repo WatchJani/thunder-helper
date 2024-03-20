@@ -85,7 +85,7 @@ func Generate8MB() {
 
 	mySimpleIDGenerator := make([]string, maxNumberOfData)
 
-	buffer := make([]byte, 8*1024*1024)
+	buffer := make([]byte, 8*1024*1024-(8*1024*1024)%100)
 
 	for index := range mySimpleIDGenerator {
 		mySimpleIDGenerator[index] = GeneratorRandom(15, '0', '9')
