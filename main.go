@@ -79,15 +79,14 @@ func (s *Store) Cutter(data []byte) {
 			log.Println(err)
 		}
 
-		for index < len(data) && key.GetKey() > string(data[index:index+15]) {
+		for index < len(data) && key.GetKey() > string(data[index+3900:index+3915]) {
 			index += 4000
 		}
 
-		//ima neka grska
 		if index+4000 < len(data) {
-			index += 4000 - SmallestThenKey(data[index:index+4000], key.GetKey())
+			index += SmallestThenKey(data[index:index+4000], key.GetKey())
 		} else {
-			index += len(data) - index
+			index += SmallestThenKey(data[index:], key.GetKey())
 		}
 
 		wg.Add(1)
@@ -101,7 +100,7 @@ func (s *Store) Cutter(data []byte) {
 func SmallestThenKey(data []byte, key string) int {
 	for index := len(data) - 100; index >= 0; index -= 100 {
 		if string(data[index:index+15]) < key {
-			return index
+			return index + 100
 		}
 	}
 
