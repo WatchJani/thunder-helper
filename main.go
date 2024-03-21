@@ -83,10 +83,12 @@ func (s *Store) Cutter(data []byte) {
 			index += 4000
 		}
 
-		if index+4000 < len(data) {
+		if index+4000 < len(data) && len(key.GetKey()) > 0 { //len(key.GetKey()) > 0 check if key exist
 			index += SmallestThenKey(data[index:index+4000], key.GetKey())
-		} else {
+		} else if len(key.GetKey()) > 0 {
 			index += SmallestThenKey(data[index:], key.GetKey())
+		} else {
+			index += len(data) - index
 		}
 
 		wg.Add(1)
