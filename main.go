@@ -19,10 +19,10 @@ const (
 type Store struct {
 	b.BPTree[string, string]
 	sync.Mutex
-	// *Stream
 }
 
 func NewStore() *Store {
+
 	return &Store{
 		BPTree: *b.NewBPTree[string, string](40_000, 50),
 		Mutex:  sync.Mutex{},
@@ -83,6 +83,7 @@ func (s *Store) Cutter(data []byte) {
 			index += 4000
 		}
 
+		//ima neka grska
 		if index+4000 < len(data) {
 			index += 4000 - SmallestThenKey(data[index:index+4000], key.GetKey())
 		} else {
@@ -129,11 +130,6 @@ func (s *Store) Process(data []byte, fileName string, wg *sync.WaitGroup) {
 		//Remove key from tree
 	}
 
-	// fmt.Println()
-	// fmt.Println(string(data))
-	// fmt.Println()
-	// fmt.Println(string(buf[:n]))
-	// fmt.Printf("============================")
 	s.MergeSort(buf[:n], data)
 
 	wg.Done()
@@ -143,16 +139,9 @@ func (s *Store) Process(data []byte, fileName string, wg *sync.WaitGroup) {
 func (s *Store) MergeSort(file, buf []byte) {
 	var fileP, bufP, freeP int
 
-	free := make([]byte, 8000)
+	free := make([]byte, 4000+len(buf))
 
 	for fileP < len(file) && bufP < len(buf) {
-		if freeP >= len(free) {
-			go WriteFile(free, freeP)
-			freeP = 0                 //Reset
-			free = make([]byte, 8000) // get new buffer from the store
-		}
-
-		//need optimization for this part, just when we find bigger then copy
 		if string(file[fileP:fileP+15]) < string(buf[bufP:bufP+15]) {
 			copy(free[freeP:], file[fileP:fileP+100])
 			fileP += 100
@@ -169,28 +158,17 @@ func (s *Store) MergeSort(file, buf []byte) {
 		pointer, position = &file, fileP
 	}
 
-	if freeP < len(free) && len(*pointer) > position+8000-freeP {
-		copy(free[freeP:], (*pointer)[position:position+8000-freeP])
+	copy(free[freeP:], (*pointer)[position:])
 
-		go WriteFile(free, 8000-freeP)
-		position += 8000 - freeP
-		freeP = 0
-		free = make([]byte, 8000)
-	}
+	freeP = 0
 
-	for position+8000 < len(*pointer) {
-		go WriteFile(free, 8000)
-		position += 8000
-		free = make([]byte, 8000)
-	}
-
-	if position < len(*pointer) {
-		copy(free[freeP:], (*pointer)[position:len(*pointer)])
-		go WriteFile(free, freeP+len(*pointer)-position)
+	for freeP+8000 <= len(free) || len(free)-freeP == 4000 {
+		go s.WriteFile(free[freeP : freeP+4000])
+		freeP += 4000
 	}
 }
 
-func WriteFile(date []byte, n int) {
+func (s *Store) WriteFile(date []byte) {
 	fileName := string(date[:15])
 
 	file, err := os.Create("./save/" + fileName + ".bin")
