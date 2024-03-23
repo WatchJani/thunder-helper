@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+
 func BenchmarkCutter(b *testing.B) {
 	b.StopTimer()
 	tree := NewStore()

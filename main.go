@@ -57,6 +57,10 @@ func main() {
 	}
 
 	tree.Cutter(buff)
+
+	for {
+
+	}
 }
 
 func (s *Store) Cutter(data []byte) {
@@ -140,7 +144,7 @@ func (s *Store) Process(data []byte, fileName string, wg *sync.WaitGroup) {
 func (s *Store) MergeSort(file, buf []byte) {
 	var fileP, bufP, freeP int
 
-	free := make([]byte, 4000+len(buf))
+	free := make([]byte, len(file)+len(buf))
 
 	for fileP < len(file) && bufP < len(buf) {
 		if string(file[fileP:fileP+15]) < string(buf[bufP:bufP+15]) {
@@ -167,6 +171,17 @@ func (s *Store) MergeSort(file, buf []byte) {
 		go s.WriteFile(free[freeP : freeP+4000])
 		freeP += 4000
 	}
+
+	//need checker ako nije paran broj
+	if freeP < len(free) {
+		half := RoundUp(freeP + (len(free)-freeP)/2)
+		go s.WriteFile(free[freeP:half])
+		go s.WriteFile(free[half:])
+	}
+}
+
+func RoundUp(index int) int {
+	return index - (index % 100)
 }
 
 func (s *Store) WriteFile(date []byte) {
