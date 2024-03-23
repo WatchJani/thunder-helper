@@ -5,6 +5,7 @@ import (
 	"os"
 	"root/gen"
 	"sync"
+	"time"
 
 	b "github.com/WatchJani/new-b-plus-tree/b_plus_tree"
 )
@@ -59,13 +60,11 @@ func main() {
 	tree.Cutter(buff)
 
 	for {
-
 	}
 }
 
 func (s *Store) Cutter(data []byte) {
 	index, wg := 0, sync.WaitGroup{}
-
 	for index < len(data) {
 		start := index
 
@@ -87,10 +86,12 @@ func (s *Store) Cutter(data []byte) {
 			index += 4000
 		}
 
-		if index+4000 < len(data) && len(key.GetKey()) > 0 { //len(key.GetKey()) > 0 check if key exist
-			index += SmallestThenKey(data[index:index+4000], key.GetKey())
-		} else if len(key.GetKey()) > 0 {
-			index += SmallestThenKey(data[index:], key.GetKey())
+		if len(key.GetKey()) > 0 {
+			if index+4000 < len(data) {
+				index += SmallestThenKey(data[index:index+4000], key.GetKey())
+			} else {
+				index += SmallestThenKey(data[index:], key.GetKey())
+			}
 		} else {
 			index += len(data) - index
 		}
@@ -100,6 +101,8 @@ func (s *Store) Cutter(data []byte) {
 	}
 
 	wg.Wait()
+
+	time.Sleep(time.Millisecond)
 	//delete 8mb file
 }
 
@@ -168,29 +171,48 @@ func (s *Store) MergeSort(file, buf []byte) {
 	freeP = 0
 
 	for freeP+8000 <= len(free) || len(free)-freeP == 4000 {
-		go s.WriteFile(free[freeP : freeP+4000])
+		s.WriteFile(free[freeP : freeP+4000])
 		freeP += 4000
 	}
 
 	//need checker ako nije paran broj
 	if freeP < len(free) {
-		half := RoundUp(freeP + (len(free)-freeP)/2)
-		go s.WriteFile(free[freeP:half])
-		go s.WriteFile(free[half:])
+		half := RoundUp(freeP+(len(free)-freeP)/2, 100)
+		s.WriteFile(free[freeP:half])
+		s.WriteFile(free[half:])
 	}
 }
 
-func RoundUp(index int) int {
-	return index - (index % 100)
+func RoundUp(index, dataLength int) int {
+	return index - (index % dataLength)
 }
 
-func (s *Store) WriteFile(date []byte) {
-	fileName := string(date[:15])
+func (s *Store) WriteFile(data []byte) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go WriteFile(data, &wg)
+	wg.Wait()
 
-	file, err := os.Create("./save/" + fileName + ".bin")
+	// s.Mutex.Lock()
+	// s.Insert(string(data[:15]), string(data[:15])+".bin")
+	// s.Mutex.Unlock()
+}
+
+func WriteFile(data []byte, wg *sync.WaitGroup) {
+	fileName := string(data[:15])
+
+	file, err := os.OpenFile("./save/"+fileName+".bin", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Println(err)
+		return
 	}
 
-	go file.Write(date)
+	defer file.Close()
+
+	if _, err := file.Write(data); err != nil {
+		log.Println(err)
+		return
+	}
+
+	wg.Done()
 }
