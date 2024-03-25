@@ -247,10 +247,9 @@ func FolderGroup(fileName string) string {
 	path := make([]byte, 19)
 	for index, pathI := 0, 0; index < len(fileName); index += 5 {
 		copy(path[pathI:], []byte(fileName[index:index+5]))
-		pathI += 5
-		path[pathI] = '/'
-		pathI++
+		path[pathI+5] = '/'
+		pathI += 6
 	}
 
-	return string(path[:len(path)-1])
+	return string(path[:len(path)-2])
 }
