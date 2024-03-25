@@ -241,3 +241,16 @@ func WriteFile(data []byte, wg *sync.WaitGroup) {
 
 	wg.Done()
 }
+
+// later implement:D
+func FolderGroup(fileName string) string {
+	path := make([]byte, 19)
+	for index, pathI := 0, 0; index < len(fileName); index += 5 {
+		copy(path[pathI:], []byte(fileName[index:index+5]))
+		pathI += 5
+		path[pathI] = '/'
+		pathI++
+	}
+
+	return string(path[:len(path)-1])
+}
