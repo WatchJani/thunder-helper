@@ -96,7 +96,7 @@ func (s *Store) Cutter(data []byte) {
 
 		fileName, err := s.GetCurrentKey()
 		if err != nil {
-			log.Println(err)
+			// log.Println(err)
 			s.NextKey()
 		}
 
@@ -181,6 +181,7 @@ func (s *Store) MergeSort(file, buf []byte) {
 			copy(free[freeP:], buf[bufP:bufP+100])
 			bufP += 100
 		} else { //is key the equal then replace //update
+			free = free[:len(free)-100]
 			copy(free[freeP:], buf[bufP:bufP+100])
 			fileP, bufP = fileP+100, bufP+100
 		}
