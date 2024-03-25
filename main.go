@@ -14,19 +14,25 @@ const (
 	KeyLength  = 15
 	KB4        = 4 * 1024
 	KB8        = 8 * 1024
+
+	Format string = ".bin"
 )
 
 type Store struct {
 	b.BPTree[string, string]
 	sync.Mutex
-	StackByte
+	keyLength         int
+	dataLength        int
+	maxDataByteInFile int
 }
 
 func NewStore() *Store {
 	return &Store{
-		BPTree:    *b.NewBPTree[string, string](40_000, 50),
-		Mutex:     sync.Mutex{},
-		StackByte: NewStackByte(1024, 8*1024),
+		BPTree:            *b.NewBPTree[string, string](40_000, 50),
+		Mutex:             sync.Mutex{},
+		keyLength:         15,
+		dataLength:        100,
+		maxDataByteInFile: (4 * 1024) - (4*1024)%100,
 	}
 }
 
@@ -63,35 +69,12 @@ func main() {
 	}
 }
 
-type StackByte struct {
-	freeSpace [][]byte
-	counter   int
-}
-
-func NewStackByte(size, length int) StackByte {
-	space := make([][]byte, size)
-
-	for index := range space {
-		space[index] = make([]byte, length)
-	}
-
-	return StackByte{
-		freeSpace: space,
-		counter:   size,
-	}
-}
-
-func (s *StackByte) GetOne() int {
-	s.counter--
-	return s.counter + 1
-}
-
 func (s *Store) Cutter(data []byte) {
 	index, wg := 0, sync.WaitGroup{}
 	for index < len(data) {
 		start := index
 
-		s.PositionSearch(string(data[index : index+15]))
+		s.PositionSearch(string(data[index : index+s.keyLength]))
 
 		fileName, err := s.GetCurrentKey()
 		if err != nil {
@@ -106,15 +89,15 @@ func (s *Store) Cutter(data []byte) {
 			log.Println(err)
 		}
 
-		for index < len(data) && key.GetKey() > string(data[index+3900:index+3915]) {
-			index += 4000
+		for index < len(data) && key.GetKey() > string(data[index+s.maxDataByteInFile-s.dataLength:index+s.maxDataByteInFile-s.dataLength+s.keyLength]) {
+			index += s.maxDataByteInFile
 		}
 
 		if len(key.GetKey()) > 0 {
-			if index+4000 < len(data) {
-				index += SmallestThenKey(data[index:index+4000], key.GetKey())
+			if index+s.maxDataByteInFile < len(data) {
+				index += s.SmallestThenKey(data[index:index+s.maxDataByteInFile], key.GetKey())
 			} else {
-				index += SmallestThenKey(data[index:], key.GetKey())
+				index += s.SmallestThenKey(data[index:], key.GetKey())
 			}
 		} else {
 			index += len(data) - index
@@ -129,10 +112,10 @@ func (s *Store) Cutter(data []byte) {
 	//delete 8mb file
 }
 
-func SmallestThenKey(data []byte, key string) int {
-	for index := len(data) - 100; index >= 0; index -= 100 {
-		if string(data[index:index+15]) < key {
-			return index + 100
+func (s Store) SmallestThenKey(data []byte, key string) int {
+	for index := len(data) - s.dataLength; index >= 0; index -= s.dataLength {
+		if string(data[index:index+s.keyLength]) < key {
+			return index + s.dataLength
 		}
 	}
 
@@ -154,7 +137,7 @@ func (s *Store) Process(data []byte, fileName string, wg *sync.WaitGroup) {
 		log.Println(err)
 	}
 
-	if string(buf[:15]) > string(data[:15]) {
+	if string(buf[:s.keyLength]) > string(data[:s.keyLength]) {
 		if err := os.Remove(fileName); err != nil {
 			log.Println(err)
 		}
@@ -172,19 +155,19 @@ func (s *Store) MergeSort(file, buf []byte) {
 	free := make([]byte, len(file)+len(buf))
 
 	for fileP < len(file) && bufP < len(buf) {
-		if string(file[fileP:fileP+15]) < string(buf[bufP:bufP+15]) {
-			copy(free[freeP:], file[fileP:fileP+100])
-			fileP += 100
-		} else if string(file[fileP:fileP+15]) > string(buf[bufP:bufP+15]) {
-			copy(free[freeP:], buf[bufP:bufP+100])
-			bufP += 100
-		} else { //is key the equal then replace //update
-			free = free[:len(free)-100]
-			copy(free[freeP:], buf[bufP:bufP+100])
-			fileP, bufP = fileP+100, bufP+100
+		if string(file[fileP:fileP+s.keyLength]) < string(buf[bufP:bufP+s.keyLength]) {
+			copy(free[freeP:], file[fileP:fileP+s.dataLength])
+			fileP += s.dataLength
+		} else if string(file[fileP:fileP+s.keyLength]) > string(buf[bufP:bufP+s.keyLength]) {
+			copy(free[freeP:], buf[bufP:bufP+s.dataLength])
+			bufP += s.dataLength
+		} else {
+			free = free[:len(free)-s.dataLength]
+			copy(free[freeP:], buf[bufP:bufP+s.dataLength])
+			fileP, bufP = fileP+s.dataLength, bufP+s.dataLength
 		}
 
-		freeP += 100
+		freeP += s.dataLength
 	}
 
 	var pointer, position = &buf, bufP
@@ -196,13 +179,13 @@ func (s *Store) MergeSort(file, buf []byte) {
 
 	freeP = 0
 
-	for freeP+8000 <= len(free) || len(free)-freeP == 4000 {
-		s.WriteFile(free[freeP : freeP+4000])
-		freeP += 4000
+	for freeP+2*s.maxDataByteInFile <= len(free) || len(free)-freeP == s.maxDataByteInFile {
+		s.WriteFile(free[freeP : freeP+s.maxDataByteInFile])
+		freeP += s.maxDataByteInFile
 	}
 
 	if freeP < len(free) {
-		half := RoundUp(freeP+(len(free)-freeP)/2, 100)
+		half := RoundUp(freeP+(len(free)-freeP)/2, s.dataLength)
 		s.WriteFile(free[freeP:half])
 		s.WriteFile(free[half:])
 	}
@@ -215,7 +198,7 @@ func RoundUp(index, dataLength int) int {
 func (s *Store) WriteFile(data []byte) {
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go WriteFile(data, &wg)
+	go s.Write(data, &wg)
 	wg.Wait()
 
 	// s.Mutex.Lock()
@@ -223,10 +206,10 @@ func (s *Store) WriteFile(data []byte) {
 	// s.Mutex.Unlock()
 }
 
-func WriteFile(data []byte, wg *sync.WaitGroup) {
-	fileName := string(data[:15])
+func (s Store) Write(data []byte, wg *sync.WaitGroup) {
+	fileName := string(data[:s.keyLength])
 
-	file, err := os.OpenFile("./save/"+fileName+".bin", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile("./save/"+fileName+Format, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Println(err)
 		return
