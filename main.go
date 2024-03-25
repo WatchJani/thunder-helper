@@ -23,7 +23,6 @@ type Store struct {
 }
 
 func NewStore() *Store {
-
 	return &Store{
 		BPTree:    *b.NewBPTree[string, string](40_000, 50),
 		Mutex:     sync.Mutex{},
@@ -167,7 +166,6 @@ func (s *Store) Process(data []byte, fileName string, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-// problem sa n, nije pun file :D
 func (s *Store) MergeSort(file, buf []byte) {
 	var fileP, bufP, freeP int
 
@@ -203,7 +201,6 @@ func (s *Store) MergeSort(file, buf []byte) {
 		freeP += 4000
 	}
 
-	//need checker ako nije paran broj
 	if freeP < len(free) {
 		half := RoundUp(freeP+(len(free)-freeP)/2, 100)
 		s.WriteFile(free[freeP:half])
