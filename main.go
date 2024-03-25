@@ -5,7 +5,6 @@ import (
 	"os"
 	"root/gen"
 	"sync"
-	"time"
 
 	b "github.com/WatchJani/new-b-plus-tree/b_plus_tree"
 )
@@ -20,14 +19,15 @@ const (
 type Store struct {
 	b.BPTree[string, string]
 	sync.Mutex
+	StackByte
 }
 
 func NewStore() *Store {
 
 	return &Store{
-		BPTree: *b.NewBPTree[string, string](40_000, 50),
-		Mutex:  sync.Mutex{},
-		// Stream: NewStream(4000, 4096),
+		BPTree:    *b.NewBPTree[string, string](40_000, 50),
+		Mutex:     sync.Mutex{},
+		StackByte: NewStackByte(1024, 8*1024),
 	}
 }
 
@@ -60,7 +60,31 @@ func main() {
 	tree.Cutter(buff)
 
 	for {
+
 	}
+}
+
+type StackByte struct {
+	freeSpace [][]byte
+	counter   int
+}
+
+func NewStackByte(size, length int) StackByte {
+	space := make([][]byte, size)
+
+	for index := range space {
+		space[index] = make([]byte, length)
+	}
+
+	return StackByte{
+		freeSpace: space,
+		counter:   size,
+	}
+}
+
+func (s *StackByte) GetOne() int {
+	s.counter--
+	return s.counter + 1
 }
 
 func (s *Store) Cutter(data []byte) {
@@ -73,6 +97,7 @@ func (s *Store) Cutter(data []byte) {
 		fileName, err := s.GetCurrentKey()
 		if err != nil {
 			log.Println(err)
+			s.NextKey()
 		}
 
 		s.NextKey()
@@ -102,7 +127,6 @@ func (s *Store) Cutter(data []byte) {
 
 	wg.Wait()
 
-	time.Sleep(time.Millisecond)
 	//delete 8mb file
 }
 
