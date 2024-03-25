@@ -177,9 +177,12 @@ func (s *Store) MergeSort(file, buf []byte) {
 		if string(file[fileP:fileP+15]) < string(buf[bufP:bufP+15]) {
 			copy(free[freeP:], file[fileP:fileP+100])
 			fileP += 100
-		} else {
+		} else if string(file[fileP:fileP+15]) > string(buf[bufP:bufP+15]) {
 			copy(free[freeP:], buf[bufP:bufP+100])
 			bufP += 100
+		} else { //is key the equal then replace //update
+			copy(free[freeP:], buf[bufP:bufP+100])
+			fileP, bufP = fileP+100, bufP+100
 		}
 
 		freeP += 100
